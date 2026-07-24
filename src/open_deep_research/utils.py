@@ -30,6 +30,10 @@ from mcp import McpError
 from tavily import AsyncTavilyClient
 
 from open_deep_research.configuration import Configuration, SearchAPI
+from open_deep_research.model_compat import (
+    get_model_compatibility_config,
+    get_structured_output_config,
+)
 from open_deep_research.prompts import summarize_webpage_prompt
 from open_deep_research.state import ResearchComplete, Summary
 
@@ -87,8 +91,12 @@ async def tavily_search(
         model=configurable.summarization_model,
         max_tokens=configurable.summarization_model_max_tokens,
         api_key=model_api_key,
-        tags=["langsmith:nostream"]
-    ).with_structured_output(Summary).with_retry(
+        tags=["langsmith:nostream"],
+        **get_model_compatibility_config(configurable.summarization_model),
+    ).with_structured_output(
+        Summary,
+        **get_structured_output_config(configurable.summarization_model),
+    ).with_retry(
         stop_after_attempt=configurable.max_structured_output_retries
     )
     

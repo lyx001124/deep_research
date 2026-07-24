@@ -19,6 +19,10 @@ from langgraph.types import Command
 from open_deep_research.configuration import (
     Configuration,
 )
+from open_deep_research.model_compat import (
+    get_model_compatibility_config,
+    get_structured_output_config,
+)
 from open_deep_research.prompts import (
     clarify_with_user_instructions,
     compress_research_simple_human_message,
@@ -54,8 +58,9 @@ from open_deep_research.utils import (
 
 # Initialize a configurable model that we will use throughout the agent
 configurable_model = init_chat_model(
-    configurable_fields=("model", "max_tokens", "api_key"),
+    configurable_fields=("model", "max_tokens", "api_key", "extra_body"),
 )
+
 
 async def clarify_with_user(state: AgentState, config: RunnableConfig) -> Command[Literal["write_research_brief", "__end__"]]:
     """Analyze user messages and ask clarifying questions if the research scope is unclear.
@@ -82,13 +87,17 @@ async def clarify_with_user(state: AgentState, config: RunnableConfig) -> Comman
         "model": configurable.research_model,
         "max_tokens": configurable.research_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.research_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **get_model_compatibility_config(configurable.research_model),
     }
     
     # Configure model with structured output and retry logic
     clarification_model = (
         configurable_model
-        .with_structured_output(ClarifyWithUser)
+        .with_structured_output(
+            ClarifyWithUser,
+            **get_structured_output_config(configurable.research_model),
+        )
         .with_retry(stop_after_attempt=configurable.max_structured_output_retries)
         .with_config(model_config)
     )
@@ -135,13 +144,17 @@ async def write_research_brief(state: AgentState, config: RunnableConfig) -> Com
         "model": configurable.research_model,
         "max_tokens": configurable.research_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.research_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **get_model_compatibility_config(configurable.research_model),
     }
     
     # Configure model for structured research question generation
     research_model = (
         configurable_model
-        .with_structured_output(ResearchQuestion)
+        .with_structured_output(
+            ResearchQuestion,
+            **get_structured_output_config(configurable.research_model),
+        )
         .with_retry(stop_after_attempt=configurable.max_structured_output_retries)
         .with_config(research_model_config)
     )
@@ -195,7 +208,8 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         "model": configurable.research_model,
         "max_tokens": configurable.research_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.research_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **get_model_compatibility_config(configurable.research_model),
     }
     
     # Available tools: research delegation, completion signaling, and strategic thinking
@@ -393,7 +407,8 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         "model": configurable.research_model,
         "max_tokens": configurable.research_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.research_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **get_model_compatibility_config(configurable.research_model),
     }
     
     # Prepare system prompt with MCP context if available
@@ -528,7 +543,8 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
         "model": configurable.compression_model,
         "max_tokens": configurable.compression_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.compression_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **get_model_compatibility_config(configurable.compression_model),
     })
     
     # Step 2: Prepare messages for compression
@@ -628,7 +644,8 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
         "model": configurable.final_report_model,
         "max_tokens": configurable.final_report_model_max_tokens,
         "api_key": get_api_key_for_model(configurable.final_report_model, config),
-        "tags": ["langsmith:nostream"]
+        "tags": ["langsmith:nostream"],
+        **get_model_compatibility_config(configurable.final_report_model),
     }
     
     # Step 3: Attempt report generation with token limit retry logic
