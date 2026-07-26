@@ -13,6 +13,7 @@
 - **引用可信控制**：按 DOI、arXiv ID 和标题去重，综合相关性、来源质量与学术影响力进行排序并生成引用白名单。
 - **本地 PDF RAG**：使用 PyMuPDF 按页解析 PDF，支持 BM25 与 Embedding/RRF 混合召回，返回带文件名、页码的证据片段。
 - **可量化评测**：内置 Hit@K、Recall@K、MRR、nDCG、引用准确率、延迟和缓存命中率评测脚本。
+- **安全降级与缓存**：PDF 内容或 Embedding 模型变化时自动失效缓存；语义服务异常时回退到 BM25，避免中断研究流程。
 - **DeepSeek V4 Pro 适配**：关闭不兼容的 Thinking Mode，并使用 Function Calling 完成结构化输出。
 - **中文化交互**：核心提示词已本地化，支持中文研究任务与中文报告生成。
 - **可观测性**：接入 LangSmith，可追踪节点输入输出、工具调用、Token 消耗、耗时与异常。
@@ -30,7 +31,7 @@ flowchart TD
     E --> F1[Researcher 子智能体 1]
     E --> F2[Researcher 子智能体 2]
     E --> F3[Researcher 子智能体 N]
-    F1 --> G[Tavily / MCP 工具]
+    F1 --> G[Tavily / 学术检索 / 本地 PDF / MCP]
     F2 --> G
     F3 --> G
     G --> H[压缩并整理研究资料]
@@ -55,6 +56,7 @@ flowchart TD
 | 大语言模型 | DeepSeek V4 Pro（也保留多模型提供商支持） |
 | 联网搜索 | Tavily Search API |
 | 学术检索 | arXiv、Crossref、Semantic Scholar |
+| 本地检索 | PyMuPDF、BM25、Embedding、RRF |
 | 工具协议 | Tool Calling、MCP |
 | 数据校验 | Pydantic |
 | 异步并发 | asyncio |
@@ -66,7 +68,7 @@ flowchart TD
 1. `clarify_with_user` 判断研究范围是否清晰，必要时向用户追问。
 2. `write_research_brief` 将对话转换成结构化研究简报。
 3. `research_supervisor` 拆分任务并通过 `ConductResearch` 调度子智能体。
-4. `researcher` 使用 ReAct 与 Tool Calling 循环调用 Tavily、arXiv、Crossref 或 MCP 工具。
+4. `researcher` 使用 ReAct 与 Tool Calling 循环调用 Tavily、arXiv、Crossref、本地 PDF 或 MCP 工具。
 5. `compress_research` 去重、压缩资料并保留来源信息。
 6. Supervisor 判断资料是否充分；不足时继续研究，充分时结束调度。
 7. `normalize_academic_sources` 解析论文记录，使用 Crossref 和 Semantic Scholar 补全元数据，执行去重、综合评分和引用验证。
@@ -90,6 +92,9 @@ deep_research/
 │   ├── legacy/                  # 早期工作流和多智能体实现
 │   └── security/                # API 鉴权逻辑
 ├── tests/                       # 评估脚本与评测器
+├── scripts/                     # 本地 PDF 检索评测 CLI
+├── eval/                        # 评测集样例；真实结果默认不提交
+├── data/papers/                 # 本地 PDF 语料库；默认被 Git 忽略
 ├── examples/                    # 示例研究报告
 ├── langgraph.json               # LangGraph 服务入口
 ├── pyproject.toml               # Python 依赖与项目配置
@@ -242,6 +247,29 @@ langgraph dev --allow-blocking
 
 PDF 分块索引与文档向量默认缓存在进程内。缓存键包含文件内容指纹、Embedding 模型和分块参数，因此文献增删改或模型变化后自动失效；缓存数量有上限，避免长期运行无限占用内存。工具结果会返回缓存命中状态、索引耗时、检索模式、降级原因和检索耗时。
 
+#### 本地验证语料
+
+开发阶段使用 20 篇 arXiv 公开论文进行本地验证，每个方向 5 篇。PDF 仅用于个人研究与测试，不随仓库分发；`data/papers/` 已加入 `.gitignore`。
+
+| 方向 | 数量 | arXiv ID |
+| --- | ---: | --- |
+| OFDM 信道估计 | 5 | `2107.07161`、`2306.13761`、`2210.06588`、`2401.02035`、`2305.13487` |
+| 深度学习 MIMO 检测 | 5 | `1901.05647`、`1907.09439`、`2105.05044`、`1706.01151`、`2205.10620` |
+| 深度学习频谱感知 | 5 | `1909.06020`、`2003.08359`、`2504.07427`、`2307.14985`、`2401.04805` |
+| 无线通信大模型 | 5 | `2505.22320`、`2501.09631`、`2307.07319`、`2507.21524`、`2408.02944` |
+
+本地可读性检查结果：
+
+| 指标 | 结果 |
+| --- | ---: |
+| PDF 数量 | 20 |
+| 总页数 | 228 |
+| 可提取字符数 | 958,056 |
+| 生成分块数 | 1,027 |
+| 无法解析文件 | 0 |
+
+以上结果只证明 PDF 解析、分块和基础召回链路可用，不代表 Hybrid 已获得确定的质量提升。质量提升必须在同一人工标注评测集上对 BM25 和 Hybrid 进行 A/B 测试后报告。
+
 ### 本地 PDF 检索评测
 
 复制 [评测样例](eval/local_pdf_cases.example.json)，为每个查询标注相关 PDF 的相对路径、页码和相关性等级：
@@ -281,6 +309,37 @@ python scripts/evaluate_local_pdf_retrieval.py `
 
 脚本输出 `Hit@K`、`Recall@K`、`Precision@K`、引用准确率、`MRR`、`nDCG@K`、平均/P95 延迟和缓存命中率。建议使用至少 30–50 条人工标注查询分别生成 `bm25.json` 和 `hybrid.json`；简历中只填写真实评测数据，不要使用示例集结果。
 
+### 完整测试
+
+运行无需外部服务的完整测试套件：
+
+```powershell
+$env:PYTHONDONTWRITEBYTECODE = "1"
+python -m pytest -q -p no:cacheprovider `
+  --ignore=src/legacy/tests/test_report_quality.py
+```
+
+当前开发环境验证结果为 `43 passed`。被忽略的旧版报告质量测试需要访问 LangSmith 外部数据集，不属于本地离线回归。
+
+如果 Windows 系统临时目录拒绝访问，可以显式指定仓库内的测试临时目录：
+
+```powershell
+New-Item -ItemType Directory -Force .pytest_cache/tmp | Out-Null
+python -m pytest -q -p no:cacheprovider `
+  --basetemp .pytest_cache/tmp `
+  --ignore=src/legacy/tests/test_report_quality.py
+```
+
+评测结果保存在 `eval/results/bm25.json` 和 `eval/results/hybrid.json`。比较时重点关注：
+
+- `Recall@K`：相关页面被召回的比例。
+- `MRR`：第一个相关页面出现的位置。
+- `nDCG@K`：高相关页面是否排在前面。
+- `Citation Accuracy`：返回引用中正确引用的比例。
+- `P95 Latency`：最慢一批查询的响应时间。
+
+质量指标越高越好，延迟指标越低越好。仓库不提供虚构的提升百分比，只有使用真实论文和人工标注得到的数据才适合写入简历。
+
 Studio 中保存的 Assistant 配置会参与运行时模型选择，因此需要确认四个模型字段均已改为 DeepSeek V4 Pro。
 
 ## 测试问题
@@ -296,6 +355,22 @@ Studio 中保存的 Assistant 配置会参与运行时模型选择，因此需�
 ```text
 请调研近三年大语言模型在无线通信信号处理中的应用，重点比较信道估计、信号检测和频谱感知三个方向的技术路线。至少引用 5 个可靠来源，说明各方案的优势、局限性及工程落地难点，并给出未来研究趋势。
 ```
+
+本地 PDF 与引用验证测试：
+
+```text
+请结合本地 PDF 文献库，比较深度学习在 OFDM 信道估计、MIMO 信号检测和频谱感知中的技术路线。说明模型结构、性能指标和工程局限，并为每项主要结论提供文件名及页码引用；不要引用检索结果中不存在的论文。
+```
+
+运行后在 Studio 中确认 `search_local_pdfs` 的工具结果包含：
+
+```xml
+requested_mode="hybrid"
+effective_mode="hybrid"
+fallback_reason=""
+```
+
+如果 `effective_mode="bm25"`，说明 Embedding 服务不可用，系统已自动降级；可以根据 `fallback_reason` 检查 API Key、模型名称或 Base URL。
 
 ## DeepSeek V4 Pro 兼容说明
 
