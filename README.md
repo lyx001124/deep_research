@@ -2,7 +2,7 @@
 
 基于 [LangGraph](https://github.com/langchain-ai/langgraph) 构建的多智能体深度研究系统。用户输入研究问题后，系统会自动澄清需求、生成研究简报、拆分子任务、调用 Tavily 检索资料、压缩研究结果，并输出带来源引用的中文研究报告。
 
-本仓库基于 LangChain 官方项目 [open_deep_research](https://github.com/langchain-ai/open_deep_research) 进行二次开发，主要增加了中文提示词与 DeepSeek V4 Pro 兼容支持。
+本仓库基于 LangChain 官方项目 [open_deep_research](https://github.com/langchain-ai/open_deep_research) 进行二次开发，增加了中文交互、DeepSeek V4 Pro 兼容、可信学术检索和本地 PDF RAG。
 
 ## 项目亮点
 
@@ -11,6 +11,8 @@
 - **Tool Calling**：模型自主决定搜索时机，通过 Tavily 获取实时网页资料，也可扩展 MCP 工具。
 - **学术文献检索**：集成 arXiv、Crossref 与 Semantic Scholar，结构化提取论文元数据并自动补全 DOI、引用指标和开放获取信息。
 - **引用可信控制**：按 DOI、arXiv ID 和标题去重，综合相关性、来源质量与学术影响力进行排序并生成引用白名单。
+- **本地 PDF RAG**：使用 PyMuPDF 按页解析 PDF，支持 BM25 与 Embedding/RRF 混合召回，返回带文件名、页码的证据片段。
+- **可量化评测**：内置 Hit@K、Recall@K、MRR、nDCG、引用准确率、延迟和缓存命中率评测脚本。
 - **DeepSeek V4 Pro 适配**：关闭不兼容的 Thinking Mode，并使用 Function Calling 完成结构化输出。
 - **中文化交互**：核心提示词已本地化，支持中文研究任务与中文报告生成。
 - **可观测性**：接入 LangSmith，可追踪节点输入输出、工具调用、Token 消耗、耗时与异常。
@@ -78,6 +80,8 @@ deep_research/
 │   ├── open_deep_research/
 │   │   ├── configuration.py     # Studio 配置与运行参数
 │   │   ├── academic_tools.py    # 学术检索、元数据补全、论文评分和引用验证
+│   │   ├── local_pdf_tools.py   # PDF 解析、混合召回、缓存和本地引用验证
+│   │   ├── retrieval_evaluation.py # 标准检索指标计算
 │   │   ├── deep_researcher.py   # LangGraph 主图和子图
 │   │   ├── model_compat.py      # DeepSeek V4 兼容层
 │   │   ├── prompts.py           # 中文提示词
@@ -158,6 +162,23 @@ SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_api_key
 # PUBLICATION_YEAR_START=2023
 # PUBLICATION_YEAR_END=2026
 
+# 可选：本地 PDF 文献库（默认关闭）
+LOCAL_PDF_SEARCH_ENABLED=true
+PDF_LIBRARY_PATH=D:/agent/deep_research/data/papers
+MAX_LOCAL_PDF_FILES=20
+MAX_LOCAL_PDF_RESULTS=6
+LOCAL_PDF_CHUNK_SIZE=1200
+LOCAL_PDF_CHUNK_OVERLAP=200
+LOCAL_PDF_CACHE_ENABLED=true
+LOCAL_PDF_CACHE_MAX_ENTRIES=8
+# 默认 bm25；启用 hybrid 后需要单独的 Embedding 模型与密钥
+LOCAL_PDF_RETRIEVAL_MODE=bm25
+LOCAL_PDF_EMBEDDING_MODEL=openai:text-embedding-3-small
+# LOCAL_PDF_EMBEDDING_BASE_URL=https://api.openai.com/v1
+# LOCAL_PDF_EMBEDDING_API_KEY=your_embedding_api_key
+LOCAL_PDF_HYBRID_CANDIDATE_LIMIT=30
+LOCAL_PDF_LEXICAL_WEIGHT=0.5
+
 # 可选：LangSmith 链路追踪
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=your_langsmith_api_key
@@ -209,6 +230,57 @@ langgraph dev --allow-blocking
 
 学术研究配置还提供 `Academic Search Enabled`、`Crossref Enrichment Enabled`、`Semantic Scholar Enabled`、`Semantic Scholar Enrichment Enabled`、`Citation Verification Enabled`、`Academic Impact Weight`、论文数量上限和可选年份范围。
 
+### 本地 PDF RAG
+
+1. 在仓库中创建 `data/papers`，把需要分析的文本型 PDF 放入该目录；该目录已被 Git 忽略。
+2. 在 `.env` 设置 `LOCAL_PDF_SEARCH_ENABLED=true` 和绝对路径 `PDF_LIBRARY_PATH`。
+3. 重启 `langgraph dev --allow-blocking`。Researcher 会在需要时调用 `search_local_pdfs`，并以 `local-pdf://文件名#page=页码` 标注证据。
+
+工具只能读取配置目录中的 PDF，不接受模型传入的磁盘路径；单文件限制 50 MB、500 页，加密、损坏和无法提取文本的文件会跳过。默认使用本地 BM25 词法检索，不需要 Embedding API 或向量数据库；扫描版 PDF 仍需要后续接入 OCR。
+
+将 `LOCAL_PDF_RETRIEVAL_MODE` 改为 `hybrid` 后，系统分别执行 BM25 与余弦语义召回，再用加权 Reciprocal Rank Fusion（RRF）融合两份排名。Embedding 模型通过 LangChain 的标准模型标识配置，不要求与 DeepSeek 报告模型来自同一供应商；Embedding 服务不可用时自动降级为 BM25，不中断研究流程。
+
+PDF 分块索引与文档向量默认缓存在进程内。缓存键包含文件内容指纹、Embedding 模型和分块参数，因此文献增删改或模型变化后自动失效；缓存数量有上限，避免长期运行无限占用内存。工具结果会返回缓存命中状态、索引耗时、检索模式、降级原因和检索耗时。
+
+### 本地 PDF 检索评测
+
+复制 [评测样例](eval/local_pdf_cases.example.json)，为每个查询标注相关 PDF 的相对路径、页码和相关性等级：
+
+```json
+{
+  "id": "ofdm-channel-estimation",
+  "query": "OFDM channel estimation pilot neural network",
+  "relevant": [
+    {"relative_path": "ofdm_survey.pdf", "page": 3, "grade": 2}
+  ]
+}
+```
+
+运行离线评测，不需要 LangSmith 或模型 API：
+
+```powershell
+python scripts/evaluate_local_pdf_retrieval.py `
+  --library D:/agent/deep_research/data/papers `
+  --cases eval/local_pdf_cases.json `
+  --output eval/results/bm25.json `
+  --k 5
+```
+
+使用同一标注集评测混合召回，才能与 BM25 基线做有效对比：
+
+```powershell
+$env:LOCAL_PDF_EMBEDDING_API_KEY = "your_embedding_api_key"
+python scripts/evaluate_local_pdf_retrieval.py `
+  --library D:/agent/deep_research/data/papers `
+  --cases eval/local_pdf_cases.json `
+  --output eval/results/hybrid.json `
+  --retrieval-mode hybrid `
+  --embedding-model openai:text-embedding-3-small `
+  --k 5
+```
+
+脚本输出 `Hit@K`、`Recall@K`、`Precision@K`、引用准确率、`MRR`、`nDCG@K`、平均/P95 延迟和缓存命中率。建议使用至少 30–50 条人工标注查询分别生成 `bm25.json` 和 `hybrid.json`；简历中只填写真实评测数据，不要使用示例集结果。
+
 Studio 中保存的 Assistant 配置会参与运行时模型选择，因此需要确认四个模型字段均已改为 DeepSeek V4 Pro。
 
 ## 测试问题
@@ -252,8 +324,11 @@ structured_output = {"method": "function_calling"}
 
 - [x] 接入 arXiv、Crossref 与 Semantic Scholar 学术检索
 - [x] 增加论文去重、来源质量、引用影响力评分与引用白名单检查
-- [ ] 支持上传 PDF，并结合本地文档与网络资料研究
-- [ ] 增加搜索缓存、成本统计和更完整的自动化测试
+- [x] 支持配置本地 PDF 文献库，并结合本地文档与网络资料研究
+- [x] 增加可选 Embedding 语义召回与 BM25/RRF 混合检索
+- [ ] 增加上传接口、OCR、持久化向量数据库和 Cross-encoder 重排
+- [x] 增加本地 PDF 索引缓存和标准检索指标评测
+- [ ] 增加网络搜索缓存、成本统计和端到端生成质量评测
 - [ ] 导出 Markdown、PDF 和 Word 格式研究报告
 - [ ] 使用 Docker 与 CI/CD 完成部署
 

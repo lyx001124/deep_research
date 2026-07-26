@@ -39,6 +39,7 @@ from open_deep_research.model_compat import (
     get_model_compatibility_config,
     get_structured_output_config,
 )
+from open_deep_research.local_pdf_tools import search_local_pdfs
 from open_deep_research.prompts import summarize_webpage_prompt
 from open_deep_research.state import ResearchComplete, Summary
 
@@ -604,6 +605,8 @@ async def get_all_tools(config: RunnableConfig):
             tools.append(query_crossref)
         if configurable.semantic_scholar_enabled:
             tools.append(search_semantic_scholar)
+    if configurable.local_pdf_search_enabled and configurable.pdf_library_path:
+        tools.append(search_local_pdfs)
     
     # Track existing tool names to prevent conflicts
     existing_tool_names = {

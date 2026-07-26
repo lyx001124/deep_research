@@ -210,6 +210,167 @@ class Configuration(BaseModel):
             }
         }
     )
+    local_pdf_search_enabled: bool = Field(
+        default=False,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": False,
+                "description": "是否启用配置目录内的本地 PDF 文献检索"
+            }
+        }
+    )
+    pdf_library_path: Optional[str] = Field(
+        default=None,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "text",
+                "description": "本地 PDF 文献库目录；研究工具不能访问此目录之外的文件"
+            }
+        }
+    )
+    max_local_pdf_files: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 20,
+                "min": 1,
+                "max": 100,
+                "description": "单次建立本地检索索引时读取的 PDF 数量上限"
+            }
+        }
+    )
+    max_local_pdf_results: int = Field(
+        default=6,
+        ge=1,
+        le=20,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 6,
+                "min": 1,
+                "max": 20,
+                "description": "单次本地 PDF 检索返回的片段数量上限"
+            }
+        }
+    )
+    local_pdf_chunk_size: int = Field(
+        default=1200,
+        ge=400,
+        le=4000,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 1200,
+                "min": 400,
+                "max": 4000,
+                "description": "PDF 文本分块的字符数"
+            }
+        }
+    )
+    local_pdf_chunk_overlap: int = Field(
+        default=200,
+        ge=0,
+        le=800,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 200,
+                "min": 0,
+                "max": 800,
+                "description": "相邻 PDF 文本块的重叠字符数"
+            }
+        }
+    )
+    local_pdf_cache_enabled: bool = Field(
+        default=True,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": True,
+                "description": "是否缓存本地 PDF 分块索引；文件变化时自动失效"
+            }
+        }
+    )
+    local_pdf_cache_max_entries: int = Field(
+        default=8,
+        ge=1,
+        le=64,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 8,
+                "min": 1,
+                "max": 64,
+                "description": "进程内最多保留的 PDF 索引版本数量"
+            }
+        }
+    )
+    local_pdf_retrieval_mode: str = Field(
+        default="bm25",
+        pattern="^(bm25|hybrid)$",
+        metadata={
+            "x_oap_ui_config": {
+                "type": "select",
+                "default": "bm25",
+                "description": "本地 PDF 使用纯 BM25 或 BM25 与 Embedding 的混合召回",
+                "options": [
+                    {"label": "BM25", "value": "bm25"},
+                    {"label": "Hybrid", "value": "hybrid"},
+                ],
+            }
+        },
+    )
+    local_pdf_embedding_model: str = Field(
+        default="openai:text-embedding-3-small",
+        metadata={
+            "x_oap_ui_config": {
+                "type": "text",
+                "default": "openai:text-embedding-3-small",
+                "description": "混合召回使用的 LangChain Embedding 模型标识",
+            }
+        },
+    )
+    local_pdf_embedding_base_url: Optional[str] = Field(
+        default=None,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "text",
+                "description": "可选的 OpenAI 兼容 Embedding API 地址",
+            }
+        },
+    )
+    local_pdf_hybrid_candidate_limit: int = Field(
+        default=30,
+        ge=5,
+        le=200,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 30,
+                "min": 5,
+                "max": 200,
+                "description": "BM25 和语义检索各自参与 RRF 融合的候选数量",
+            }
+        },
+    )
+    local_pdf_lexical_weight: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 0.5,
+                "min": 0.0,
+                "max": 1.0,
+                "description": "RRF 融合中的 BM25 权重；语义权重为 1 减去该值",
+            }
+        },
+    )
     publication_year_start: Optional[int] = Field(
         default=None,
         ge=1900,

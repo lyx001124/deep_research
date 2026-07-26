@@ -66,4 +66,8 @@ node_modules/
 tmp/
 temp/
 
+# Local research documents may be private or copyrighted
+data/papers/
+eval/results/
+
 .langgraph_api

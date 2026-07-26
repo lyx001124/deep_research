@@ -1,0 +1,18 @@
+[
+  {
+    "id": "ofdm-channel-estimation",
+    "query": "OFDM channel estimation pilot neural network",
+    "relevant": [
+      {
+        "relative_path": "ofdm_survey.pdf",
+        "page": 3,
+        "grade": 2
+      },
+      {
+        "relative_path": "ofdm_survey.pdf",
+        "page": 7,
+        "grade": 1
+      }
+    ]
+  }
+]

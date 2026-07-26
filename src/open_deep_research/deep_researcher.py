@@ -27,6 +27,10 @@ from open_deep_research.academic_tools import (
     normalize_rank_and_verify_papers,
     sanitize_report_citations,
 )
+from open_deep_research.local_pdf_tools import (
+    extract_local_pdf_citations,
+    sanitize_local_pdf_citations,
+)
 from open_deep_research.model_compat import (
     get_model_compatibility_config,
     get_structured_output_config,
@@ -350,6 +354,15 @@ async def supervisor_tools(state: SupervisorState, config: RunnableConfig) -> Co
             
             if raw_notes_concat:
                 update_payload["raw_notes"] = [raw_notes_concat]
+            trusted_local_citations = sorted(
+                {
+                    citation
+                    for observation in tool_results
+                    for citation in observation.get("trusted_local_citations", [])
+                }
+            )
+            if trusted_local_citations:
+                update_payload["trusted_local_citations"] = trusted_local_citations
                 
         except Exception as e:
             # Handle research execution errors
@@ -557,6 +570,14 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
     
     # Step 2: Prepare messages for compression
     researcher_messages = state.get("researcher_messages", [])
+    trusted_local_citations = sorted(
+        {
+            citation
+            for message in researcher_messages
+            if isinstance(message, ToolMessage) and message.name == "search_local_pdfs"
+            for citation in extract_local_pdf_citations([str(message.content)])
+        }
+    )
     
     # Add instruction to switch from research mode to compression mode
     researcher_messages.append(HumanMessage(content=compress_research_simple_human_message))
@@ -583,7 +604,8 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
             # Return successful compression result
             return {
                 "compressed_research": str(response.content),
-                "raw_notes": [raw_notes_content]
+                "raw_notes": [raw_notes_content],
+                "trusted_local_citations": trusted_local_citations,
             }
             
         except Exception as e:
@@ -605,7 +627,8 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
     
     return {
         "compressed_research": "Error synthesizing research report: Maximum retries exceeded",
-        "raw_notes": [raw_notes_content]
+        "raw_notes": [raw_notes_content],
+        "trusted_local_citations": trusted_local_citations,
     }
 
 # Researcher Subgraph Construction
@@ -722,11 +745,22 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
                     report_content,
                     state.get("verified_citations", []),
                 )
+            report_content, rejected_local_citations = sanitize_local_pdf_citations(
+                report_content,
+                set(state.get("trusted_local_citations", [])),
+            )
             verified_report = AIMessage(content=report_content)
             rejected_citations = list(state.get("rejected_citations", []))
             rejected_citations.extend(
                 {"url": url, "rejection_reason": "not_in_academic_whitelist"}
                 for url in rejected_urls
+            )
+            rejected_citations.extend(
+                {
+                    "url": citation,
+                    "rejection_reason": "not_in_local_document_whitelist",
+                }
+                for citation in rejected_local_citations
             )
             return {
                 "final_report": report_content,

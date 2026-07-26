@@ -97,6 +97,7 @@ class AgentState(MessagesState):
     papers: Annotated[list[dict], override_reducer] = []
     verified_citations: Annotated[list[dict], override_reducer] = []
     rejected_citations: Annotated[list[dict], override_reducer] = []
+    trusted_local_citations: Annotated[list[str], override_reducer] = []
     final_report: str
 
 class SupervisorState(TypedDict):
@@ -107,6 +108,7 @@ class SupervisorState(TypedDict):
     notes: Annotated[list[str], override_reducer] = []
     research_iterations: int = 0
     raw_notes: Annotated[list[str], override_reducer] = []
+    trusted_local_citations: Annotated[list[str], override_reducer] = []
 
 class ResearcherState(TypedDict):
     """State for individual researchers conducting research."""
@@ -116,9 +118,11 @@ class ResearcherState(TypedDict):
     research_topic: str
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer] = []
+    trusted_local_citations: Annotated[list[str], override_reducer] = []
 
 class ResearcherOutputState(BaseModel):
     """Output state from individual researchers."""
     
     compressed_research: str
     raw_notes: Annotated[list[str], override_reducer] = []
+    trusted_local_citations: Annotated[list[str], override_reducer] = []
