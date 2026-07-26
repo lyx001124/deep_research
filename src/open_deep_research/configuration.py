@@ -117,13 +117,94 @@ class Configuration(BaseModel):
             }
         }
     )
+    # Academic research configuration
+    academic_search_enabled: bool = Field(
+        default=True,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": True,
+                "description": "是否为研究智能体启用 arXiv 与 Crossref 学术检索工具"
+            }
+        }
+    )
+    crossref_enrichment_enabled: bool = Field(
+        default=True,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": True,
+                "description": "是否使用 Crossref 补充论文 DOI、期刊和出版年份"
+            }
+        }
+    )
+    citation_verification_enabled: bool = Field(
+        default=True,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": True,
+                "description": "是否在报告生成前后验证学术引用并移除未知链接"
+            }
+        }
+    )
+    max_papers_per_query: int = Field(
+        default=10,
+        ge=1,
+        le=30,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 10,
+                "min": 1,
+                "max": 30,
+                "description": "单次学术检索最多返回的论文数量"
+            }
+        }
+    )
+    max_academic_papers: int = Field(
+        default=20,
+        ge=1,
+        le=100,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 20,
+                "min": 1,
+                "max": 100,
+                "description": "去重和排序后提供给最终报告的论文数量上限"
+            }
+        }
+    )
+    publication_year_start: Optional[int] = Field(
+        default=None,
+        ge=1900,
+        le=2100,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "description": "可选的论文发表年份下限"
+            }
+        }
+    )
+    publication_year_end: Optional[int] = Field(
+        default=None,
+        ge=1900,
+        le=2100,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "description": "可选的论文发表年份上限"
+            }
+        }
+    )
     # Model Configuration
     summarization_model: str = Field(
-        default="openai:gpt-4.1-mini",
+        default="openai:deepseek-v4-pro",
         metadata={
             "x_oap_ui_config": {
                 "type": "text",
-                "default": "openai:gpt-4.1-mini",
+                "default": "openai:deepseek-v4-pro",
                 "description": "Model for summarizing research results from Tavily search results"
             }
         }
@@ -151,11 +232,11 @@ class Configuration(BaseModel):
         }
     )
     research_model: str = Field(
-        default="openai:gpt-4.1",
+        default="openai:deepseek-v4-pro",
         metadata={
             "x_oap_ui_config": {
                 "type": "text",
-                "default": "openai:gpt-4.1",
+                "default": "openai:deepseek-v4-pro",
                 "description": "Model for conducting research. NOTE: Make sure your Researcher Model supports the selected search API."
             }
         }
@@ -171,11 +252,11 @@ class Configuration(BaseModel):
         }
     )
     compression_model: str = Field(
-        default="openai:gpt-4.1",
+        default="openai:deepseek-v4-pro",
         metadata={
             "x_oap_ui_config": {
                 "type": "text",
-                "default": "openai:gpt-4.1",
+                "default": "openai:deepseek-v4-pro",
                 "description": "Model for compressing research findings from sub-agents. NOTE: Make sure your Compression Model supports the selected search API."
             }
         }
@@ -191,11 +272,11 @@ class Configuration(BaseModel):
         }
     )
     final_report_model: str = Field(
-        default="openai:gpt-4.1",
+        default="openai:deepseek-v4-pro",
         metadata={
             "x_oap_ui_config": {
                 "type": "text",
-                "default": "openai:gpt-4.1",
+                "default": "openai:deepseek-v4-pro",
                 "description": "Model for writing the final report from all research findings"
             }
         }

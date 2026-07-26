@@ -19,6 +19,13 @@ from langgraph.types import Command
 from open_deep_research.configuration import (
     Configuration,
 )
+from open_deep_research.academic_tools import (
+    build_citation_context,
+    enrich_papers_with_crossref,
+    extract_papers_from_notes,
+    normalize_rank_and_verify_papers,
+    sanitize_report_citations,
+)
 from open_deep_research.model_compat import (
     get_model_compatibility_config,
     get_structured_output_config,
@@ -620,6 +627,37 @@ researcher_builder.add_edge("compress_research", END)      # Exit point after co
 # Compile researcher subgraph for parallel execution by supervisor
 researcher_subgraph = researcher_builder.compile()
 
+
+async def normalize_academic_sources(state: AgentState, config: RunnableConfig):
+    """Normalize, enrich, deduplicate, and verify academic sources before writing."""
+    configurable = Configuration.from_runnable_config(config)
+    if not configurable.academic_search_enabled:
+        return {
+            "papers": {"type": "override", "value": []},
+            "verified_citations": {"type": "override", "value": []},
+            "rejected_citations": {"type": "override", "value": []},
+        }
+
+    raw_notes = [str(note) for note in state.get("raw_notes", [])]
+    research_notes = [str(note) for note in state.get("notes", [])]
+    extracted = extract_papers_from_notes(raw_notes + research_notes)
+    enriched = await enrich_papers_with_crossref(
+        extracted,
+        enabled=configurable.crossref_enrichment_enabled,
+    )
+    verified, rejected = normalize_rank_and_verify_papers(
+        enriched,
+        state.get("research_brief", ""),
+        configurable.max_academic_papers,
+        configurable.publication_year_start,
+        configurable.publication_year_end,
+    )
+    return {
+        "papers": {"type": "override", "value": verified},
+        "verified_citations": {"type": "override", "value": verified},
+        "rejected_citations": {"type": "override", "value": rejected},
+    }
+
 async def final_report_generation(state: AgentState, config: RunnableConfig):
     """Generate the final comprehensive research report with retry logic for token limits.
     
@@ -660,6 +698,7 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
                 research_brief=state.get("research_brief", ""),
                 messages=get_buffer_string(state.get("messages", [])),
                 findings=findings,
+                citation_context=build_citation_context(state.get("verified_citations", [])),
                 date=get_today_str()
             )
             
@@ -669,9 +708,26 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
             ])
             
             # Return successful report generation
+            report_content = str(final_report.content)
+            rejected_urls = []
+            if configurable.citation_verification_enabled:
+                report_content, rejected_urls = sanitize_report_citations(
+                    report_content,
+                    state.get("verified_citations", []),
+                )
+            verified_report = AIMessage(content=report_content)
+            rejected_citations = list(state.get("rejected_citations", []))
+            rejected_citations.extend(
+                {"url": url, "rejection_reason": "not_in_academic_whitelist"}
+                for url in rejected_urls
+            )
             return {
-                "final_report": final_report.content, 
-                "messages": [final_report],
+                "final_report": report_content,
+                "messages": [verified_report],
+                "rejected_citations": {
+                    "type": "override",
+                    "value": rejected_citations,
+                },
                 **cleared_state
             }
             
@@ -725,11 +781,13 @@ deep_researcher_builder = StateGraph(
 deep_researcher_builder.add_node("clarify_with_user", clarify_with_user)           # User clarification phase
 deep_researcher_builder.add_node("write_research_brief", write_research_brief)     # Research planning phase
 deep_researcher_builder.add_node("research_supervisor", supervisor_subgraph)       # Research execution phase
+deep_researcher_builder.add_node("normalize_academic_sources", normalize_academic_sources)  # Academic source verification
 deep_researcher_builder.add_node("final_report_generation", final_report_generation)  # Report generation phase
 
 # Define main workflow edges for sequential execution
 deep_researcher_builder.add_edge(START, "clarify_with_user")                       # Entry point
-deep_researcher_builder.add_edge("research_supervisor", "final_report_generation") # Research to report
+deep_researcher_builder.add_edge("research_supervisor", "normalize_academic_sources") # Research to source verification
+deep_researcher_builder.add_edge("normalize_academic_sources", "final_report_generation") # Verified sources to report
 deep_researcher_builder.add_edge("final_report_generation", END)                   # Final exit point
 
 # Compile the complete deep researcher workflow

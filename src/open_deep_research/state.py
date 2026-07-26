@@ -48,6 +48,24 @@ class ResearchQuestion(BaseModel):
     )
 
 
+class Paper(BaseModel):
+    """Normalized metadata for an academic paper returned by research tools."""
+
+    title: str
+    authors: list[str] = Field(default_factory=list)
+    abstract: str = ""
+    published_year: Optional[int] = None
+    doi: Optional[str] = None
+    arxiv_id: Optional[str] = None
+    url: str
+    source: str
+    venue: Optional[str] = None
+    research_direction: Optional[str] = None
+    relevance_score: float = 0.0
+    quality_score: float = 0.0
+    verification_status: str = "unverified"
+
+
 ###################
 # State Definitions
 ###################
@@ -69,6 +87,9 @@ class AgentState(MessagesState):
     research_brief: Optional[str]
     raw_notes: Annotated[list[str], override_reducer] = []
     notes: Annotated[list[str], override_reducer] = []
+    papers: Annotated[list[dict], override_reducer] = []
+    verified_citations: Annotated[list[dict], override_reducer] = []
+    rejected_citations: Annotated[list[dict], override_reducer] = []
     final_report: str
 
 class SupervisorState(TypedDict):
