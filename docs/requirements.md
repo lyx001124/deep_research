@@ -23,11 +23,11 @@
 ## 4. P0 核心功能
 
 1. Supervisor 将复杂研究问题拆分为独立子任务。
-2. Researcher 使用 arXiv 检索论文，使用 Crossref 补全和核验元数据。
+2. Researcher 使用 arXiv 和 Semantic Scholar 检索论文，使用 Crossref 补全和核验元数据。
 3. 论文统一为 `Paper` 结构，保留标题、作者、摘要、年份、DOI、arXiv ID、URL、来源和出版载体。
 4. 按 DOI、arXiv ID、规范化标题依次去重，并合并不同来源的元数据。
-5. 使用确定性规则计算相关性和来源质量分数。
-6. 只允许具有 DOI 或 arXiv ID 且带原始 URL 的论文进入引用白名单。
+5. 使用确定性规则计算相关性、来源质量、学术影响力和综合分数；相关性权重高于引用量。
+6. 只允许具有有效 DOI、arXiv ID 或 Semantic Scholar Paper ID 且带规范 URL 的论文进入引用白名单。
 7. 最终报告只能从白名单引用学术论文；未知 DOI/arXiv 链接会被标记并记录。
 8. LangSmith 可以追踪检索、规范化和报告生成节点。
 
@@ -63,7 +63,9 @@
 
 ## 7. 来源与引用规则
 
-来源优先级为：出版社或会议官网、Crossref/DOI、arXiv、研究机构官网、其他网页。博客和聚合网站只用于背景信息，不作为论文元数据来源。
+来源优先级为：出版社或会议官网、Crossref/DOI、arXiv、Semantic Scholar、研究机构官网、其他网页。博客和聚合网站只用于背景信息，不作为论文元数据来源。
+
+Semantic Scholar 用于补充引用量、影响力引用量和开放获取信息。引用指标只能作为影响力信号，不能证明论文结论正确，也不能替代主题相关性判断。API 失败或限流时，系统保留已有 arXiv/Crossref 记录并继续生成报告。
 
 - 论文元数据只能来自工具结果。
 - 学术引用必须有 DOI 或 arXiv ID 和有效 URL。
@@ -105,6 +107,6 @@
 
 ## 11. 后续版本
 
-- 接入 Semantic Scholar 与领域数据库。
+- 接入更多电子信息领域数据库。
 - 增加 PDF 分块、Embedding 和向量检索。
 - 增加报告导出、缓存、成本统计和 Docker 部署。

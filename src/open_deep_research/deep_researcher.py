@@ -22,6 +22,7 @@ from open_deep_research.configuration import (
 from open_deep_research.academic_tools import (
     build_citation_context,
     enrich_papers_with_crossref,
+    enrich_papers_with_semantic_scholar,
     extract_papers_from_notes,
     normalize_rank_and_verify_papers,
     sanitize_report_citations,
@@ -645,12 +646,18 @@ async def normalize_academic_sources(state: AgentState, config: RunnableConfig):
         extracted,
         enabled=configurable.crossref_enrichment_enabled,
     )
+    enriched = await enrich_papers_with_semantic_scholar(
+        enriched,
+        enabled=configurable.semantic_scholar_enrichment_enabled,
+        config=config,
+    )
     verified, rejected = normalize_rank_and_verify_papers(
         enriched,
         state.get("research_brief", ""),
         configurable.max_academic_papers,
         configurable.publication_year_start,
         configurable.publication_year_end,
+        configurable.academic_impact_weight,
     )
     return {
         "papers": {"type": "override", "value": verified},

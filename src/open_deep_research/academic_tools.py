@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import math
+import os
 import re
 import unicodedata
 from datetime import datetime, timezone
@@ -19,11 +21,17 @@ from open_deep_research.state import Paper
 
 PAPER_RECORDS_START = "<academic_papers>"
 PAPER_RECORDS_END = "</academic_papers>"
+SEMANTIC_SCHOLAR_API_BASE = "https://api.semanticscholar.org/graph/v1"
+SEMANTIC_SCHOLAR_FIELDS = (
+    "paperId,title,abstract,year,authors,url,externalIds,venue,"
+    "citationCount,influentialCitationCount,isOpenAccess,openAccessPdf"
+)
 DOI_PATTERN = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
 ARXIV_ID_PATTERN = re.compile(
     r"(?:arxiv:)?(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)",
     re.IGNORECASE,
 )
+SEMANTIC_SCHOLAR_ID_PATTERN = re.compile(r"^[0-9a-f]{40}$", re.IGNORECASE)
 TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+-]{1,}|[\u4e00-\u9fff]{2,}")
 
 
@@ -45,6 +53,14 @@ def normalize_arxiv_id(value: Optional[str]) -> Optional[str]:
     if not match:
         return None
     return re.sub(r"v\d+$", "", match.group(1), flags=re.IGNORECASE).lower()
+
+
+def normalize_semantic_scholar_id(value: Optional[str]) -> Optional[str]:
+    """Return a canonical Semantic Scholar paper ID or None when invalid."""
+    if not value:
+        return None
+    paper_id = value.strip().lower()
+    return paper_id if SEMANTIC_SCHOLAR_ID_PATTERN.fullmatch(paper_id) else None
 
 
 def normalize_title(value: str) -> str:
@@ -80,6 +96,139 @@ def _crossref_authors(item: dict[str, Any]) -> list[str]:
         if name:
             authors.append(name)
     return authors
+
+
+def _semantic_scholar_headers(config: RunnableConfig = None) -> dict[str, str]:
+    """Build optional Semantic Scholar authentication headers without exposing keys."""
+    api_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+    if os.getenv("GET_API_KEYS_FROM_CONFIG", "false").lower() == "true" and config:
+        api_key = config.get("configurable", {}).get("apiKeys", {}).get(
+            "SEMANTIC_SCHOLAR_API_KEY"
+        )
+    return {"x-api-key": api_key} if api_key else {}
+
+
+def semantic_scholar_item_to_paper(
+    item: dict[str, Any],
+    research_direction: Optional[str] = None,
+) -> Optional[Paper]:
+    """Convert one Semantic Scholar record to the normalized Paper schema."""
+    title = _clean_text(item.get("title"))
+    paper_id = normalize_semantic_scholar_id(_clean_text(item.get("paperId")))
+    external_ids = item.get("externalIds") or {}
+    doi = normalize_doi(external_ids.get("DOI"))
+    arxiv_id = normalize_arxiv_id(external_ids.get("ArXiv"))
+    if doi:
+        url = f"https://doi.org/{doi}"
+    elif arxiv_id:
+        url = f"https://arxiv.org/abs/{arxiv_id}"
+    elif paper_id:
+        url = f"https://www.semanticscholar.org/paper/{paper_id}"
+    else:
+        url = item.get("url")
+    if not title or not url:
+        return None
+    open_access_pdf = item.get("openAccessPdf") or {}
+    return Paper(
+        title=title,
+        authors=[_clean_text(author.get("name")) for author in item.get("authors", []) if author.get("name")],
+        abstract=_clean_text(item.get("abstract")),
+        published_year=item.get("year"),
+        doi=doi,
+        arxiv_id=arxiv_id,
+        semantic_scholar_id=paper_id,
+        url=url,
+        source="semantic_scholar",
+        venue=_clean_text(item.get("venue")) or None,
+        research_direction=research_direction,
+        citation_count=max(0, int(item.get("citationCount") or 0)),
+        influential_citation_count=max(0, int(item.get("influentialCitationCount") or 0)),
+        is_open_access=bool(item.get("isOpenAccess")),
+        open_access_url=open_access_pdf.get("url"),
+        verification_status="source_verified",
+    )
+
+
+async def _semantic_scholar_request(
+    method: str,
+    path: str,
+    *,
+    config: RunnableConfig = None,
+    params: Optional[dict[str, Any]] = None,
+    json_body: Optional[Any] = None,
+    client: Optional[httpx.AsyncClient] = None,
+) -> Any:
+    """Call Semantic Scholar with bounded retries for throttling and transient failures."""
+    owns_client = client is None
+    client = client or httpx.AsyncClient(
+        timeout=httpx.Timeout(15.0),
+        headers={
+            "User-Agent": "deep-research-academic-agent/2.0",
+            **_semantic_scholar_headers(config),
+        },
+    )
+    try:
+        for attempt in range(3):
+            response = await client.request(
+                method,
+                f"{SEMANTIC_SCHOLAR_API_BASE}{path}",
+                params=params,
+                json=json_body,
+            )
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt < 2:
+                    retry_after = response.headers.get("Retry-After")
+                    delay = min(float(retry_after), 4.0) if retry_after else 0.5 * (2**attempt)
+                    await asyncio.sleep(delay)
+                    continue
+            response.raise_for_status()
+            return response.json()
+    finally:
+        if owns_client:
+            await client.aclose()
+
+
+@tool(
+    description=(
+        "检索 Semantic Scholar 学术论文，返回可验证的标题、作者、摘要、年份、DOI、arXiv ID、"
+        "引用量、影响力引用量和开放获取信息。适合寻找代表性论文并评估学术影响力。"
+        "应使用准确的英文检索词，论文元数据只能采用工具返回值。"
+    )
+)
+async def search_semantic_scholar(
+    query: str,
+    max_results: Annotated[Optional[int], InjectedToolArg] = None,
+    config: RunnableConfig = None,
+) -> str:
+    """Search Semantic Scholar and return marked JSON paper records."""
+    configurable = Configuration.from_runnable_config(config)
+    limit = min(max_results or configurable.max_papers_per_query, configurable.max_papers_per_query)
+    try:
+        payload = await _semantic_scholar_request(
+            "GET",
+            "/paper/search",
+            config=config,
+            params={"query": query, "limit": limit, "fields": SEMANTIC_SCHOLAR_FIELDS},
+        )
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        reason = "rate_limited" if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429 else "unavailable"
+        return (
+            f"{serialize_papers([])}\n"
+            f"<academic_search_warning provider=\"semantic_scholar\" reason=\"{reason}\">"
+            "Semantic Scholar 暂时不可用，请继续使用 arXiv、Crossref 或其他已配置来源。"
+            "</academic_search_warning>"
+        )
+    papers = [
+        paper
+        for item in payload.get("data", [])
+        if (paper := semantic_scholar_item_to_paper(item, research_direction=query))
+    ]
+    papers = filter_papers_by_year(
+        papers,
+        configurable.publication_year_start,
+        configurable.publication_year_end,
+    )
+    return serialize_papers(papers)
 
 
 def paper_to_dict(paper: Paper | dict[str, Any]) -> dict[str, Any]:
@@ -298,6 +447,8 @@ def _paper_identity(paper: Paper) -> tuple[str, str]:
         return "doi", paper.doi
     if paper.arxiv_id:
         return "arxiv", paper.arxiv_id
+    if paper.semantic_scholar_id:
+        return "semantic_scholar", paper.semantic_scholar_id
     return "title", normalize_title(paper.title)
 
 
@@ -315,7 +466,16 @@ def _merge_papers(existing: Paper, incoming: Paper) -> Paper:
     )
     primary, secondary = records
     data = primary.model_dump()
-    for field in ("abstract", "published_year", "doi", "arxiv_id", "venue", "research_direction"):
+    for field in (
+        "abstract",
+        "published_year",
+        "doi",
+        "arxiv_id",
+        "semantic_scholar_id",
+        "venue",
+        "research_direction",
+        "open_access_url",
+    ):
         if not data.get(field) and getattr(secondary, field):
             data[field] = getattr(secondary, field)
     if len(secondary.authors) > len(data.get("authors", [])):
@@ -323,9 +483,71 @@ def _merge_papers(existing: Paper, incoming: Paper) -> Paper:
     if primary.source != secondary.source:
         sources = set(primary.source.split("+")) | set(secondary.source.split("+"))
         data["source"] = "+".join(sorted(sources))
+    data["citation_count"] = max(primary.citation_count, secondary.citation_count)
+    data["influential_citation_count"] = max(
+        primary.influential_citation_count,
+        secondary.influential_citation_count,
+    )
+    data["is_open_access"] = primary.is_open_access or secondary.is_open_access
     if data.get("doi"):
         data["url"] = f"https://doi.org/{data['doi']}"
     return Paper.model_validate(data)
+
+
+def _semantic_scholar_lookup_id(paper: Paper) -> Optional[str]:
+    if paper.semantic_scholar_id:
+        return paper.semantic_scholar_id
+    if paper.doi:
+        return f"DOI:{paper.doi}"
+    if paper.arxiv_id:
+        return f"ARXIV:{paper.arxiv_id}"
+    return None
+
+
+async def enrich_papers_with_semantic_scholar(
+    records: list[Paper | dict[str, Any]],
+    enabled: bool = True,
+    config: RunnableConfig = None,
+) -> list[Paper]:
+    """Batch-enrich papers with citation and open-access metadata, failing open."""
+    papers = [
+        record if isinstance(record, Paper) else Paper.model_validate(record)
+        for record in records
+    ]
+    if not enabled:
+        return papers
+    indexed_ids = [
+        (index, lookup_id)
+        for index, paper in enumerate(papers)
+        if (lookup_id := _semantic_scholar_lookup_id(paper))
+    ]
+    if not indexed_ids:
+        return papers
+    enriched = list(papers)
+    for start in range(0, len(indexed_ids), 100):
+        chunk = indexed_ids[start : start + 100]
+        try:
+            payload = await _semantic_scholar_request(
+                "POST",
+                "/paper/batch",
+                config=config,
+                params={"fields": SEMANTIC_SCHOLAR_FIELDS},
+                json_body={"ids": [lookup_id for _, lookup_id in chunk]},
+            )
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            continue
+        if not isinstance(payload, list):
+            continue
+        for (index, _), item in zip(chunk, payload):
+            if not item:
+                continue
+            candidate = semantic_scholar_item_to_paper(
+                item,
+                research_direction=enriched[index].research_direction,
+            )
+            if candidate:
+                enriched[index] = _merge_papers(enriched[index], candidate)
+    return enriched
 
 
 async def enrich_papers_with_crossref(
@@ -365,6 +587,9 @@ def deduplicate_papers(records: list[Paper | dict[str, Any]]) -> list[Paper]:
             continue
         paper.doi = normalize_doi(paper.doi)
         paper.arxiv_id = normalize_arxiv_id(paper.arxiv_id)
+        paper.semantic_scholar_id = normalize_semantic_scholar_id(
+            paper.semantic_scholar_id
+        )
         identity = _paper_identity(paper)
         existing_index = identities.get(identity)
         if existing_index is None and identity[0] != "title":
@@ -380,6 +605,8 @@ def deduplicate_papers(records: list[Paper | dict[str, Any]]) -> list[Paper]:
             keys.add(("doi", merged.doi))
         if merged.arxiv_id:
             keys.add(("arxiv", merged.arxiv_id))
+        if merged.semantic_scholar_id:
+            keys.add(("semantic_scholar", merged.semantic_scholar_id))
         for key in keys:
             identities[key] = existing_index
     return deduplicated
@@ -389,7 +616,11 @@ def _query_tokens(text: str) -> set[str]:
     return {token.casefold() for token in TOKEN_PATTERN.findall(text or "")}
 
 
-def score_paper(paper: Paper, research_brief: str) -> Paper:
+def score_paper(
+    paper: Paper,
+    research_brief: str,
+    impact_weight: float = 0.2,
+) -> Paper:
     """Assign deterministic relevance and source-quality scores."""
     query_tokens = _query_tokens(research_brief)
     paper_tokens = _query_tokens(f"{paper.title} {paper.abstract} {paper.research_direction or ''}")
@@ -408,7 +639,25 @@ def score_paper(paper: Paper, research_brief: str) -> Paper:
         age = max(0, datetime.now(timezone.utc).year - paper.published_year)
         recency = max(0.0, 0.05 - min(age, 10) * 0.005)
     paper.quality_score = round(min(1.0, source_base + metadata + recency), 4)
-    paper.verification_status = "verified" if paper.url and (paper.doi or paper.arxiv_id) else "source_verified"
+
+    citation_score = min(1.0, math.log1p(paper.citation_count) / math.log1p(1000))
+    influential_score = min(
+        1.0,
+        math.log1p(paper.influential_citation_count) / math.log1p(100),
+    )
+    paper.impact_score = round(0.7 * citation_score + 0.3 * influential_score, 4)
+    bounded_impact_weight = min(0.5, max(0.0, impact_weight))
+    remaining_weight = 1.0 - bounded_impact_weight
+    paper.overall_score = round(
+        remaining_weight * (0.65 * paper.relevance_score + 0.35 * paper.quality_score)
+        + bounded_impact_weight * paper.impact_score,
+        4,
+    )
+    paper.verification_status = (
+        "verified"
+        if paper.url and (paper.doi or paper.arxiv_id or paper.semantic_scholar_id)
+        else "source_verified"
+    )
     return paper
 
 
@@ -418,6 +667,7 @@ def normalize_rank_and_verify_papers(
     limit: int,
     year_start: Optional[int] = None,
     year_end: Optional[int] = None,
+    impact_weight: float = 0.2,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Normalize, filter, deduplicate, score, and split accepted/rejected records."""
     accepted: list[Paper] = []
@@ -429,11 +679,20 @@ def normalize_rank_and_verify_papers(
         if record.published_year and year_end and record.published_year > year_end:
             rejected.append({**paper_to_dict(record), "rejection_reason": "after_year_end"})
             continue
-        if not record.url or not (record.doi or record.arxiv_id):
+        if not record.url or not (
+            record.doi or record.arxiv_id or record.semantic_scholar_id
+        ):
             rejected.append({**paper_to_dict(record), "rejection_reason": "missing_stable_identifier"})
             continue
-        accepted.append(score_paper(record, research_brief))
-    accepted.sort(key=lambda item: (item.relevance_score, item.quality_score), reverse=True)
+        accepted.append(score_paper(record, research_brief, impact_weight=impact_weight))
+    accepted.sort(
+        key=lambda item: (
+            item.overall_score,
+            item.relevance_score,
+            item.quality_score,
+        ),
+        reverse=True,
+    )
     rejected.extend(
         {**paper_to_dict(item), "rejection_reason": "result_limit"}
         for item in accepted[limit:]
@@ -449,10 +708,15 @@ def build_citation_context(papers: list[dict[str, Any]]) -> str:
     lines.append(f"共获得 {len(papers)} 篇已验证且去重后的论文。")
     for index, paper in enumerate(papers, 1):
         authors = ", ".join(paper.get("authors", [])[:6]) or "作者未知"
-        identifier = paper.get("doi") or paper.get("arxiv_id")
+        identifier = (
+            paper.get("doi")
+            or paper.get("arxiv_id")
+            or paper.get("semantic_scholar_id")
+        )
         lines.append(
             f"[{index}] {paper['title']} | {authors} | {paper.get('published_year') or '年份未知'} | "
-            f"{identifier} | {paper['url']}"
+            f"{identifier} | 引用量 {paper.get('citation_count', 0)} | "
+            f"影响力引用 {paper.get('influential_citation_count', 0)} | {paper['url']}"
         )
     lines.append("不得增加白名单之外的论文、DOI 或学术 URL；信息不足时必须明确说明。")
     return "\n".join(lines)
@@ -472,12 +736,12 @@ def sanitize_report_citations(report: str, papers: list[dict[str, Any]]) -> tupl
         if paper.get("arxiv_id")
     )
     allowed.update(
-        f"https://arxiv.org/abs/{paper['arxiv_id']}".lower()
+        f"https://www.semanticscholar.org/paper/{paper['semantic_scholar_id']}".lower()
         for paper in papers
-        if paper.get("arxiv_id")
+        if normalize_semantic_scholar_id(paper.get("semantic_scholar_id"))
     )
     academic_pattern = re.compile(
-        r"https?://[^\s)\]>]*(?:doi\.org|arxiv\.org)[^\s)\]>]*",
+        r"https?://[^\s)\]>]*(?:doi\.org|arxiv\.org|semanticscholar\.org)[^\s)\]>]*",
         re.IGNORECASE,
     )
     rejected = []

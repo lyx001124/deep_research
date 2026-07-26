@@ -57,12 +57,19 @@ class Paper(BaseModel):
     published_year: Optional[int] = None
     doi: Optional[str] = None
     arxiv_id: Optional[str] = None
+    semantic_scholar_id: Optional[str] = None
     url: str
     source: str
     venue: Optional[str] = None
     research_direction: Optional[str] = None
+    citation_count: int = 0
+    influential_citation_count: int = 0
+    is_open_access: bool = False
+    open_access_url: Optional[str] = None
     relevance_score: float = 0.0
     quality_score: float = 0.0
+    impact_score: float = 0.0
+    overall_score: float = 0.0
     verification_status: str = "unverified"
 
 

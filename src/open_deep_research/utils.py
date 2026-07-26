@@ -30,7 +30,11 @@ from mcp import McpError
 from tavily import AsyncTavilyClient
 
 from open_deep_research.configuration import Configuration, SearchAPI
-from open_deep_research.academic_tools import query_crossref, search_arxiv
+from open_deep_research.academic_tools import (
+    query_crossref,
+    search_arxiv,
+    search_semantic_scholar,
+)
 from open_deep_research.model_compat import (
     get_model_compatibility_config,
     get_structured_output_config,
@@ -598,6 +602,8 @@ async def get_all_tools(config: RunnableConfig):
         tools.append(search_arxiv)
         if configurable.crossref_enrichment_enabled:
             tools.append(query_crossref)
+        if configurable.semantic_scholar_enabled:
+            tools.append(search_semantic_scholar)
     
     # Track existing tool names to prevent conflicts
     existing_tool_names = {

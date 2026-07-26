@@ -138,6 +138,26 @@ class Configuration(BaseModel):
             }
         }
     )
+    semantic_scholar_enabled: bool = Field(
+        default=True,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": True,
+                "description": "是否启用 Semantic Scholar 学术检索工具"
+            }
+        }
+    )
+    semantic_scholar_enrichment_enabled: bool = Field(
+        default=True,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "boolean",
+                "default": True,
+                "description": "是否使用 Semantic Scholar 补充引用量、影响力引用量和开放获取信息"
+            }
+        }
+    )
     citation_verification_enabled: bool = Field(
         default=True,
         metadata={
@@ -173,6 +193,20 @@ class Configuration(BaseModel):
                 "min": 1,
                 "max": 100,
                 "description": "去重和排序后提供给最终报告的论文数量上限"
+            }
+        }
+    )
+    academic_impact_weight: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=0.5,
+        metadata={
+            "x_oap_ui_config": {
+                "type": "number",
+                "default": 0.2,
+                "min": 0.0,
+                "max": 0.5,
+                "description": "综合排序中学术影响力分数的权重"
             }
         }
     )

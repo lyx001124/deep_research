@@ -172,6 +172,7 @@ def test_normalize_academic_sources_node_updates_verified_state():
         "configurable": {
             "academic_search_enabled": True,
             "crossref_enrichment_enabled": False,
+            "semantic_scholar_enrichment_enabled": False,
             "max_academic_papers": 10,
         }
     }
