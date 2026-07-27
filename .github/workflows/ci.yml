@@ -52,8 +52,12 @@ jobs:
             paths: tests/test_academic_tools.py tests/test_semantic_scholar.py
           - suite: local-rag
             paths: tests/test_local_pdf_tools.py tests/test_retrieval_evaluation.py tests/test_local_pdf_evaluation_cli.py
-          - suite: report-cli
-            paths: tests/test_run_research_report.py
+          - suite: report-cli-write
+            paths: tests/test_run_research_report.py::test_run_writes_final_report_and_passes_configuration
+          - suite: report-cli-empty
+            paths: tests/test_run_research_report.py::test_run_rejects_empty_final_report
+          - suite: report-cli-parser
+            paths: tests/test_run_research_report.py::test_parser_defaults_to_hybrid_output
     steps:
       - name: Checkout
         uses: actions/checkout@v4
