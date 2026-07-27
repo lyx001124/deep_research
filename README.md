@@ -419,6 +419,73 @@ structured_output = {"method": "function_calling"}
 
 请勿使用包含隐私、密码或敏感资料的问题进行公开追踪测试。
 
+## Docker 与 CI/CD 部署
+
+项目使用官方 LangGraph API `0.11.1` 生产镜像，Compose 同时启动 API、PostgreSQL/pgvector 和 Redis。PostgreSQL 与 Redis 使用具名卷持久化，论文目录以只读方式挂载到容器，API 提供容器健康检查和优雅停止时间。
+
+### 本地 Docker 部署
+
+服务器需要安装 Docker Engine 与 Docker Compose v2。准备环境变量时只复制模板，不要提交真实 `.env`：
+
+```bash
+cp .env.example .env
+mkdir -p data/papers
+```
+
+至少填写以下配置：
+
+- `OPENAI_API_KEY`、`DEEPSEEK_API_KEY` 和相应 Base URL
+- `TAVILY_API_KEY`（启用网络搜索时）
+- `POSTGRES_PASSWORD`，建议使用 URL 安全的强随机字符串
+- `LANGSMITH_API_KEY` 或自托管许可对应的 `LANGGRAPH_CLOUD_LICENSE_KEY`
+- `SUPABASE_URL`、`SUPABASE_KEY`，生产 API 的 Supabase JWT 鉴权需要它们
+- Hybrid 检索所需的 Embedding 模型、Base URL 和 API Key
+
+构建并启动：
+
+```bash
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+docker compose logs -f langgraph-api
+```
+
+默认 API 地址为 <http://localhost:8123>。升级时使用 `docker compose pull` 和 `docker compose up -d`；数据库与 Redis 数据不会因容器重建丢失。服务器上的 `data/papers/` 不进入镜像或 Git，只读挂载到 `/data/papers`。
+
+### CI
+
+[CI 工作流](.github/workflows/ci.yml) 在功能分支、`main` 和 Pull Request 上自动执行：
+
+1. 安装 Python 3.11 依赖并验证 `langgraph.json`。
+2. 运行不依赖外部 API 的完整回归测试。
+3. 检查 Docker Compose 配置。
+4. 使用 BuildKit 构建生产镜像，但不在 PR 中发布。
+
+### CD
+
+[CD 工作流](.github/workflows/cd.yml) 在代码进入 `main` 或推送 `v*` 标签后，将带有 commit SHA、`latest` 或版本号标签的镜像发布到 GitHub Container Registry：
+
+```text
+ghcr.io/lyx001124/deep_research:<commit-sha>
+```
+
+发布使用不可变 commit SHA、BuildKit 缓存、构建来源证明和 SBOM。生产部署始终引用 SHA 标签，避免 `latest` 漂移造成不可复现升级。
+
+若需要 GitHub Actions 自动更新云服务器，在仓库 `Settings -> Secrets and variables -> Actions` 中配置：
+
+| 类型 | 名称 | 用途 |
+| --- | --- | --- |
+| Variable | `DEPLOY_ENABLED=true` | 开启 SSH 部署任务 |
+| Variable | `DEPLOY_PATH` | 服务器上的仓库绝对路径 |
+| Secret | `DEPLOY_HOST` | 服务器地址 |
+| Secret | `DEPLOY_USER` | SSH 用户 |
+| Secret | `DEPLOY_SSH_KEY` | SSH 私钥 |
+| Secret | `DEPLOY_PORT` | SSH 端口，可选 |
+| Secret | `GHCR_DEPLOY_USER` | 用于服务器拉取镜像的 GitHub 用户名 |
+| Secret | `GHCR_DEPLOY_TOKEN` | 仅授予 `read:packages` 的 GitHub Token |
+
+服务器部署目录必须已克隆仓库、切换到 `main`、配置生产 `.env` 并安装 Docker。建议在 GitHub `production` Environment 中启用人工审批和分支保护。没有设置 `DEPLOY_ENABLED` 时，CD 仍会安全地完成 GHCR 镜像发布，但不会连接任何服务器。
+
 ## 后续计划
 
 - [x] 接入 arXiv、Crossref 与 Semantic Scholar 学术检索
@@ -429,7 +496,7 @@ structured_output = {"method": "function_calling"}
 - [x] 增加本地 PDF 索引缓存和标准检索指标评测
 - [ ] 增加网络搜索缓存、成本统计和端到端生成质量评测
 - [ ] 导出 Markdown、PDF 和 Word 格式研究报告
-- [ ] 使用 Docker 与 CI/CD 完成部署
+- [x] 使用 Docker Compose、GitHub Actions 与 GHCR 完成可重复部署
 
 ## 致谢与许可
 

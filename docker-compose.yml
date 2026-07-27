@@ -1,0 +1,67 @@
+name: deep-research
+
+services:
+  langgraph-redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  langgraph-postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    command: ["postgres", "-c", "shared_preload_libraries=vector"]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  langgraph-api:
+    image: ${APP_IMAGE:-deep-research:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VCS_REF: ${VCS_REF:-local}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URI: postgres://postgres:${POSTGRES_PASSWORD}@langgraph-postgres:5432/postgres?sslmode=disable
+      REDIS_URI: redis://langgraph-redis:6379
+      PDF_LIBRARY_PATH: /data/papers
+    volumes:
+      - ./data/papers:/data/papers:ro
+    ports:
+      - "${APP_PORT:-8123}:8000"
+    depends_on:
+      langgraph-redis:
+        condition: service_healthy
+      langgraph-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "/api/healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+
+volumes:
+  redis-data:
+  postgres-data:
