@@ -1,6 +1,7 @@
 """Tests for the report-generation command-line entry point."""
 
 import argparse
+import asyncio
 import importlib.util
 from pathlib import Path
 
@@ -34,8 +35,7 @@ def make_args(tmp_path):
     )
 
 
-@pytest.mark.asyncio
-async def test_run_writes_final_report_and_passes_configuration(tmp_path):
+def test_run_writes_final_report_and_passes_configuration(tmp_path):
     module = load_script_module()
     args = make_args(tmp_path)
     captured = {}
@@ -47,7 +47,7 @@ async def test_run_writes_final_report_and_passes_configuration(tmp_path):
             return {"final_report": "# 测试报告\n\n内容"}
 
     module.deep_researcher = FakeGraph()
-    report = await module.run(args)
+    report = asyncio.run(module.run(args))
 
     assert report == "# 测试报告\n\n内容"
     assert args.output.read_text(encoding="utf-8") == report + "\n"
@@ -58,8 +58,7 @@ async def test_run_writes_final_report_and_passes_configuration(tmp_path):
     assert captured["config"]["recursion_limit"] == 50
 
 
-@pytest.mark.asyncio
-async def test_run_rejects_empty_final_report(tmp_path):
+def test_run_rejects_empty_final_report(tmp_path):
     module = load_script_module()
     args = make_args(tmp_path)
 
@@ -69,7 +68,7 @@ async def test_run_rejects_empty_final_report(tmp_path):
 
     module.deep_researcher = EmptyGraph()
     with pytest.raises(RuntimeError, match="without a final_report"):
-        await module.run(args)
+        asyncio.run(module.run(args))
     assert not args.output.exists()
 
 
