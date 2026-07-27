@@ -8,13 +8,17 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from dotenv import load_dotenv
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SRC_DIR = PROJECT_ROOT / "src"
+load_dotenv(PROJECT_ROOT / ".env")
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from open_deep_research.local_pdf_tools import (  # noqa: E402
+    build_pdf_document_chunks,
     clear_pdf_index_cache,
     create_embedding_client,
     load_cached_pdf_chunks,
@@ -65,7 +69,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                 local_pdf_embedding_base_url=args.embedding_base_url,
             )
         )
-        embedding_namespace = f"{args.embedding_model}|{args.embedding_base_url or ''}"
+        embedding_namespace = (
+            f"document-v1|{args.embedding_model}|{args.embedding_base_url or ''}"
+        )
     for case in cases:
         started = time.perf_counter()
         chunks, cache_hit = load_cached_pdf_chunks(
@@ -76,8 +82,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             cache_enabled=not args.no_cache,
         )
         if args.retrieval_mode == "hybrid":
+            semantic_documents = build_pdf_document_chunks(chunks)
             document_vectors, _ = load_cached_embeddings(
-                chunks,
+                semantic_documents,
                 embeddings,
                 namespace=embedding_namespace,
                 cache_enabled=not args.no_cache,

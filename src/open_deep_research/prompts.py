@@ -217,6 +217,7 @@ compress_research_system_prompt = """你是一名研究助理，已经通过调�
 4. 报告末尾应包含 "Sources" 部分，列出研究员找到的全部来源以及与报告陈述对应的引用。
 5. 确保报告包含研究员收集到的全部来源，并说明这些来源如何用于回答问题。
 6. 不要遗漏任何来源，这一点非常重要。后续会由另一个 LLM 将本报告与其他报告合并，因此保留全部来源至关重要。
+7. 对本地 PDF 证据，必须原样保留每一条 `local-pdf://文件#page=页码` 引用，并把引用紧跟在对应事实之后；不得只保留文件名或将页码改写为普通文本。
 </Guidelines>
 
 <Output Format>
@@ -266,6 +267,10 @@ final_report_generation_prompt = """根据已经完成的全部研究，围绕�
 {citation_context}
 </Verified Academic Citations>
 
+<Trusted Local PDF Citations>
+{local_citation_context}
+</Trusted Local PDF Citations>
+
 请围绕总体研究简报生成一份详细回答，并满足以下要求：
 1. 使用正确的标题组织内容（标题使用 #，章节使用 ##，子章节使用 ###）
 2. 包含研究中获得的具体事实和见解
@@ -278,6 +283,8 @@ final_report_generation_prompt = """根据已经完成的全部研究，围绕�
 9. 如果白名单论文数量少于用户要求，必须明确说明实际检索数量和限制，不得虚构记录补足数量
 10. 论文比较表应在有数据时展示引用量、影响力引用量和开放获取状态；不得猜测缺失指标
 11. 使用本地 PDF 证据时，必须注明文件名和页码，并使用工具返回的 `local-pdf://` 引用；不得编造未检索到的原文
+12. Trusted Local PDF Citations 是唯一允许使用的本地引用白名单。每个来自本地 PDF 的主要事实必须紧跟一条白名单中的完整引用，例如 `local-pdf://paper.pdf#page=3`。不得只写“某文件第 3 页”而省略完整引用
+13. 如果 Findings 中某项结论没有可对应的可信本地引用，必须删除该结论或明确标注“本次检索证据不足”，不得使用模型常识补全
 
 报告可以采用多种结构。以下是一些示例：
 

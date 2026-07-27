@@ -11,6 +11,7 @@ from open_deep_research.local_pdf_tools import (
     LOCAL_DOCUMENTS_END,
     LOCAL_DOCUMENTS_START,
     clear_pdf_index_cache,
+    build_pdf_document_chunks,
     extract_local_pdf_citations,
     get_pdf_index_cache_stats,
     load_cached_pdf_chunks,
@@ -99,12 +100,30 @@ def test_semantic_ranking_can_find_a_non_lexical_match():
     assert records[0]["citation"] == "local-pdf://target.pdf#page=2"
 
 
+def test_document_semantic_records_use_each_pdf_first_page():
+    from open_deep_research.local_pdf_tools import LocalPDFChunk
+
+    chunks = [
+        LocalPDFChunk("paper.pdf", 1, 0, "title and abstract"),
+        LocalPDFChunk("paper.pdf", 1, 1, "abstract continuation"),
+        LocalPDFChunk("paper.pdf", 2, 0, "method details"),
+        LocalPDFChunk("other.pdf", 1, 0, "other abstract"),
+    ]
+    documents = build_pdf_document_chunks(chunks)
+    assert [document.relative_path for document in documents] == [
+        "other.pdf",
+        "paper.pdf",
+    ]
+    assert all(document.page == 1 for document in documents)
+    assert "abstract continuation" in documents[1].text
+
+
 def test_hybrid_ranking_uses_rrf_and_preserves_citations():
     from open_deep_research.local_pdf_tools import LocalPDFChunk
 
     chunks = [
         LocalPDFChunk("lexical.pdf", 1, 0, "OFDM pilot estimation"),
-        LocalPDFChunk("semantic.pdf", 2, 0, "semantic target"),
+        LocalPDFChunk("semantic.pdf", 1, 0, "semantic target"),
     ]
     records = rank_pdf_chunks_hybrid(
         "OFDM estimation",
@@ -116,7 +135,7 @@ def test_hybrid_ranking_uses_rrf_and_preserves_citations():
     )
     assert {record["citation"] for record in records} == {
         "local-pdf://lexical.pdf#page=1",
-        "local-pdf://semantic.pdf#page=2",
+        "local-pdf://semantic.pdf#page=1",
     }
     assert all(record["retrieval_mode"] == "hybrid_rrf" for record in records)
 

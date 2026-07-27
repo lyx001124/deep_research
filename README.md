@@ -243,7 +243,7 @@ langgraph dev --allow-blocking
 
 工具只能读取配置目录中的 PDF，不接受模型传入的磁盘路径；单文件限制 50 MB、500 页，加密、损坏和无法提取文本的文件会跳过。默认使用本地 BM25 词法检索，不需要 Embedding API 或向量数据库；扫描版 PDF 仍需要后续接入 OCR。
 
-将 `LOCAL_PDF_RETRIEVAL_MODE` 改为 `hybrid` 后，系统分别执行 BM25 与余弦语义召回，再用加权 Reciprocal Rank Fusion（RRF）融合两份排名。Embedding 模型通过 LangChain 的标准模型标识配置，不要求与 DeepSeek 报告模型来自同一供应商；Embedding 服务不可用时自动降级为 BM25，不中断研究流程。
+将 `LOCAL_PDF_RETRIEVAL_MODE` 改为 `hybrid` 后，系统执行页面级 BM25 召回和论文级语义召回，再用加权 Reciprocal Rank Fusion（RRF）融合两份排名。论文级语义记录由每篇 PDF 首页的标题和摘要构成，既减少向量数量，也避免页面级语义召回经常命中正确论文却返回错误页。Embedding 模型通过 LangChain 的标准模型标识配置，不要求与 DeepSeek 报告模型来自同一供应商；Embedding 服务不可用时自动降级为 BM25，不中断研究流程。
 
 PDF 分块索引与文档向量默认缓存在进程内。缓存键包含文件内容指纹、Embedding 模型和分块参数，因此文献增删改或模型变化后自动失效；缓存数量有上限，避免长期运行无限占用内存。工具结果会返回缓存命中状态、索引耗时、检索模式、降级原因和检索耗时。
 
@@ -268,7 +268,16 @@ PDF 分块索引与文档向量默认缓存在进程内。缓存键包含文件�
 | 生成分块数 | 1,027 |
 | 无法解析文件 | 0 |
 
-以上结果只证明 PDF 解析、分块和基础召回链路可用，不代表 Hybrid 已获得确定的质量提升。质量提升必须在同一人工标注评测集上对 BM25 和 Hybrid 进行 A/B 测试后报告。
+在 40 条中英文人工核对查询上，使用相同语料、标签和 `K=5` 得到以下结果：
+
+| 指标 | BM25 | Hybrid |
+| --- | ---: | ---: |
+| Recall@5 | 0.550 | 0.800 |
+| MRR | 0.379 | 0.654 |
+| nDCG@5 | 0.421 | 0.691 |
+| 平均延迟 | 142.35 ms | 280.90 ms |
+
+Hybrid 的 Recall@5、MRR 和 nDCG@5 相对 BM25 分别提升约 45.5%、72.6% 和 64.1%，代价是平均检索延迟增加。该小规模数据集参与了架构诊断，属于人工核对的开发基准而非独立盲测集；完整方法、结果和局限见 [检索基准报告](docs/retrieval_benchmark.md)。
 
 ### 本地 PDF 检索评测
 
@@ -297,17 +306,32 @@ python scripts/evaluate_local_pdf_retrieval.py `
 使用同一标注集评测混合召回，才能与 BM25 基线做有效对比：
 
 ```powershell
-$env:LOCAL_PDF_EMBEDDING_API_KEY = "your_embedding_api_key"
 python scripts/evaluate_local_pdf_retrieval.py `
   --library D:/agent/deep_research/data/papers `
   --cases eval/local_pdf_cases.json `
   --output eval/results/hybrid.json `
   --retrieval-mode hybrid `
-  --embedding-model openai:text-embedding-3-small `
+  --embedding-model openai:BAAI/bge-m3 `
+  --embedding-base-url https://api.siliconflow.cn/v1 `
   --k 5
 ```
 
-脚本输出 `Hit@K`、`Recall@K`、`Precision@K`、引用准确率、`MRR`、`nDCG@K`、平均/P95 延迟和缓存命中率。建议使用至少 30–50 条人工标注查询分别生成 `bm25.json` 和 `hybrid.json`；简历中只填写真实评测数据，不要使用示例集结果。
+Embedding Key 从 `.env` 中的 `LOCAL_PDF_EMBEDDING_API_KEY` 读取，不要写入命令、README 或提交记录。脚本输出 `Hit@K`、`Recall@K`、`Precision@K`、引用准确率、`MRR`、`nDCG@K`、平均/P95 延迟和缓存命中率。简历中只填写真实评测数据，并明确这是当前本地开发基准结果。
+
+### 无 Studio 生成报告
+
+可直接运行完整 LangGraph，并将最终报告保存为 Markdown：
+
+```powershell
+python scripts/run_research_report.py "请仅结合本地 PDF 文献库比较 OFDM 信道估计、MIMO 信号检测和频谱感知。" `
+  --output eval/results/final_report.md `
+  --library data/papers `
+  --retrieval-mode hybrid `
+  --search-api none `
+  --local-only
+```
+
+真实端到端验收生成了 18,307 字符报告，覆盖三个研究方向，包含 149 次本地引用、29 个唯一文件页码引用并覆盖 15 篇 PDF；全部引用文件存在且页码有效。报告位于被 Git 忽略的 `eval/results/`，不会意外上传私人研究产物。
 
 ### 完整测试
 
@@ -319,7 +343,7 @@ python -m pytest -q -p no:cacheprovider `
   --ignore=src/legacy/tests/test_report_quality.py
 ```
 
-当前开发环境验证结果为 `43 passed`。被忽略的旧版报告质量测试需要访问 LangSmith 外部数据集，不属于本地离线回归。
+当前开发环境的实际测试数量以本次 `pytest` 输出为准。被忽略的旧版报告质量测试需要访问 LangSmith 外部数据集，不属于本地离线回归。
 
 如果 Windows 系统临时目录拒绝访问，可以显式指定仓库内的测试临时目录：
 

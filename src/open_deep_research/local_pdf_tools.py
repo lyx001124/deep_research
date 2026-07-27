@@ -408,6 +408,32 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float:
     return numerator / (left_norm * right_norm)
 
 
+def build_pdf_document_chunks(
+    chunks: list[LocalPDFChunk],
+    max_chars: int = 6000,
+) -> list[LocalPDFChunk]:
+    """Build one title-and-abstract-oriented semantic record per PDF."""
+    grouped: dict[str, list[LocalPDFChunk]] = {}
+    for chunk in chunks:
+        if chunk.page == 1:
+            grouped.setdefault(chunk.relative_path, []).append(chunk)
+
+    documents = []
+    for relative_path, page_chunks in sorted(grouped.items()):
+        ordered = sorted(page_chunks, key=lambda item: item.chunk_index)
+        text = "\n".join(item.text for item in ordered)[:max_chars]
+        if text.strip():
+            documents.append(
+                LocalPDFChunk(
+                    relative_path=relative_path,
+                    page=1,
+                    chunk_index=0,
+                    text=text,
+                )
+            )
+    return documents
+
+
 def rank_pdf_chunks_semantic(
     query: str,
     chunks: list[LocalPDFChunk],
@@ -492,12 +518,13 @@ def rank_pdf_chunks_hybrid(
     semantic_weight: float = 0.5,
     document_vectors: Optional[list[list[float]]] = None,
 ) -> list[dict]:
-    """Combine BM25 and embedding rankings with weighted RRF."""
+    """Fuse page-level BM25 with document-level semantic retrieval."""
     candidates = max(limit, candidate_limit)
     lexical = rank_pdf_chunks(query, chunks, candidates)
+    semantic_documents = build_pdf_document_chunks(chunks)
     semantic = rank_pdf_chunks_semantic(
         query,
-        chunks,
+        semantic_documents,
         candidates,
         embeddings,
         document_vectors=document_vectors,
@@ -631,13 +658,14 @@ async def search_local_pdfs(
     if requested_mode == "hybrid":
         try:
             embeddings = create_embedding_client(configurable)
+            semantic_documents = build_pdf_document_chunks(chunks)
             embedding_namespace = (
-                f"{configurable.local_pdf_embedding_model}|"
+                f"document-v1|{configurable.local_pdf_embedding_model}|"
                 f"{configurable.local_pdf_embedding_base_url or ''}"
             )
             document_vectors, embedding_cache_hit = await asyncio.to_thread(
                 load_cached_embeddings,
-                chunks,
+                semantic_documents,
                 embeddings,
                 namespace=embedding_namespace,
                 cache_enabled=configurable.local_pdf_cache_enabled,

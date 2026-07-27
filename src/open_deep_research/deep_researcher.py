@@ -729,6 +729,9 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
                 messages=get_buffer_string(state.get("messages", [])),
                 findings=findings,
                 citation_context=build_citation_context(state.get("verified_citations", [])),
+                local_citation_context="\n".join(
+                    sorted(set(state.get("trusted_local_citations", [])))
+                ),
                 date=get_today_str()
             )
             

@@ -1,0 +1,202 @@
+[
+  {
+    "id": "ofdm-attention-ft-english",
+    "query": "deep learning OFDM channel estimation frequency-time division attention mechanism",
+    "relevant": [{"relative_path": "ofdm_2107_07161.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-attention-ft-chinese",
+    "query": "使用频域时域划分与注意力机制完成深度学习OFDM信道估计",
+    "relevant": [{"relative_path": "ofdm_2107_07161.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-cebed-english",
+    "query": "CeBed benchmark reproducible evaluation of deep data-driven OFDM channel estimation",
+    "relevant": [{"relative_path": "ofdm_2306_13761.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-cebed-chinese",
+    "query": "用于数据驱动OFDM信道估计算法可复现比较的基准测试平台",
+    "relevant": [{"relative_path": "ofdm_2306_13761.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-unfolding-english",
+    "query": "efficient deep unfolding SISO OFDM channel estimation model-driven network",
+    "relevant": [{"relative_path": "ofdm_2210_06588.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-unfolding-chinese",
+    "query": "面向单输入单输出OFDM信道估计的高效深度展开网络",
+    "relevant": [{"relative_path": "ofdm_2210_06588.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-information-geometry-english",
+    "query": "efficient information geometry approach massive MIMO OFDM channel estimation",
+    "relevant": [{"relative_path": "ofdm_2401_02035.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-information-geometry-chinese",
+    "query": "利用信息几何方法降低大规模MIMO OFDM信道估计复杂度",
+    "relevant": [{"relative_path": "ofdm_2401_02035.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-online-learning-english",
+    "query": "real-time online learning framework MIMO OFDM channel estimation time-varying channel",
+    "relevant": [{"relative_path": "ofdm_2305_13487.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "ofdm-online-learning-chinese",
+    "query": "能够适应时变信道的实时在线学习MIMO-OFDM信道估计框架",
+    "relevant": [{"relative_path": "ofdm_2305_13487.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-joint-decoding-english",
+    "query": "deep learning joint MIMO detection and channel decoding iterative receiver",
+    "relevant": [{"relative_path": "mimo_1901_05647.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-joint-decoding-chinese",
+    "query": "联合执行MIMO信号检测与信道译码的深度学习接收机",
+    "relevant": [{"relative_path": "mimo_1901_05647.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-model-driven-english",
+    "query": "model-driven deep learning MIMO detection iterative algorithm trainable parameters",
+    "relevant": [{"relative_path": "mimo_1907_09439.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-model-driven-chinese",
+    "query": "将迭代检测算法展开为可训练网络的模型驱动MIMO检测方法",
+    "relevant": [{"relative_path": "mimo_1907_09439.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-understanding-english",
+    "query": "understanding deep MIMO detection generalization complexity interpretability",
+    "relevant": [{"relative_path": "mimo_2105_05044.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-understanding-chinese",
+    "query": "分析深度MIMO检测器的泛化能力复杂度与可解释性",
+    "relevant": [{"relative_path": "mimo_2105_05044.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-detnet-english",
+    "query": "DetNet deep neural network MIMO detection projected gradient descent",
+    "relevant": [{"relative_path": "mimo_1706_01151.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-detnet-chinese",
+    "query": "基于投影梯度思想构建的DetNet深度MIMO检测网络",
+    "relevant": [{"relative_path": "mimo_1706_01151.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-gnn-amp-english",
+    "query": "graph neural network enhanced approximate message passing ultra-massive MIMO detection",
+    "relevant": [{"relative_path": "mimo_2205_10620.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "mimo-gnn-amp-chinese",
+    "query": "图神经网络增强近似消息传递的超大规模MIMO检测方法",
+    "relevant": [{"relative_path": "mimo_2205_10620.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-cognitive-radio-english",
+    "query": "deep learning classification spectrum sensing cognitive radio residual network power spectrum",
+    "relevant": [{"relative_path": "spectrum_1909_06020.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-cognitive-radio-chinese",
+    "query": "使用功率谱与残差网络进行认知无线电频谱感知分类",
+    "relevant": [{"relative_path": "spectrum_1909_06020.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-scf-english",
+    "query": "spectral correlation function CNN spectrum sensing signal identification cyclostationarity",
+    "relevant": [{"relative_path": "spectrum_2003_08359.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-scf-chinese",
+    "query": "利用谱相关函数和循环平稳特征实现频谱感知与信号识别",
+    "relevant": [{"relative_path": "spectrum_2003_08359.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-wideband-english",
+    "query": "wideband spectrum sensing dual-representation multi-taper power spectrum subband shuffling augmentation",
+    "relevant": [{"relative_path": "spectrum_2504_07427.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-wideband-chinese",
+    "query": "结合双表示输入和子带打乱数据增强的宽带频谱感知",
+    "relevant": [{"relative_path": "spectrum_2504_07427.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-ris-english",
+    "query": "RIS-aided spectrum sensing Detectron2 YOLOv7 spectrogram 4G LTE 5G NR",
+    "relevant": [{"relative_path": "spectrum_2307_14985.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-ris-chinese",
+    "query": "利用可重构智能表面增强接收功率并通过目标检测识别频谱占用",
+    "relevant": [{"relative_path": "spectrum_2307_14985.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-deepsweep-english",
+    "query": "DeepSweep parallel scalable spectrum sensing convolutional neural network fast inference",
+    "relevant": [{"relative_path": "spectrum_2401_04805.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "spectrum-deepsweep-chinese",
+    "query": "并行切分频谱块以实现快速可扩展CNN频谱感知的DeepSweep系统",
+    "relevant": [{"relative_path": "spectrum_2401_04805.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-fpga-english",
+    "query": "large language model wireless system development FPGA Verilog 64-point FFT in-context learning",
+    "relevant": [{"relative_path": "llm-wireless_2307_07319.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-fpga-chinese",
+    "query": "大语言模型辅助FPGA无线系统开发并生成64点Verilog FFT模块",
+    "relevant": [{"relative_path": "llm-wireless_2307_07319.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-resource-allocation-english",
+    "query": "LLM empowered wireless resource allocation energy efficiency spectral efficiency reliability",
+    "relevant": [{"relative_path": "llm-wireless_2408_02944.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-resource-allocation-chinese",
+    "query": "使用大语言模型优化无线资源分配中的能量效率和频谱效率",
+    "relevant": [{"relative_path": "llm-wireless_2408_02944.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-dataset-pvi-english",
+    "query": "wireless communication LLM dataset multi-hop questions PVI fine-tuning framework",
+    "relevant": [{"relative_path": "llm-wireless_2501_09631.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-dataset-pvi-chinese",
+    "query": "面向无线通信多跳问答数据集的PVI样本难度排序与大模型微调",
+    "relevant": [{"relative_path": "llm-wireless_2501_09631.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-cot-wireless-english",
+    "query": "chain-of-thought LLM intent-driven wireless networks UAV control policies reinforcement learning",
+    "relevant": [{"relative_path": "llm-wireless_2505_22320.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-cot-wireless-chinese",
+    "query": "通过思维链把用户意图转换为无人机无线网络控制策略",
+    "relevant": [{"relative_path": "llm-wireless_2505_22320.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-adaptation-autonomy-english",
+    "query": "large language models wireless communications adaptation foundation models agentic autonomy coordination",
+    "relevant": [{"relative_path": "llm-wireless_2507_21524.pdf", "page": 1, "grade": 2}]
+  },
+  {
+    "id": "llm-adaptation-autonomy-chinese",
+    "query": "无线通信大模型从领域适配基础模型发展到智能体自主协同",
+    "relevant": [{"relative_path": "llm-wireless_2507_21524.pdf", "page": 1, "grade": 2}]
+  }
+]
